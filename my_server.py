@@ -2,11 +2,19 @@ from fastmcp import FastMCP
 import httpx
 from urllib.parse import urlencode
 from typing import Any, Dict
+import logging
 
 mcp = FastMCP("My MCP Server")
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+logger = logging.getLogger("mcp-server")
+
 @mcp.tool
 def greet(name: str) -> str:
+    logger.info("Tool called: greet(name=%r)", name)
     return f"Hello, {name}!"
 
 
@@ -20,7 +28,8 @@ def search_products(q: str) -> Dict[str, Any]:
     Returns:
         The parsed JSON response (or an {error: "..."} object).
     """
-
+    
+    logger.info("Tool called: search_products(q=%r)", q)
     if not isinstance(q, str) or not q.strip():
         return {"error": "Parameter 'q' must be a non-empty string."}
 
