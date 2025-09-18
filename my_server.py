@@ -15,7 +15,7 @@ logger = logging.getLogger("mcp-server")
 @mcp.tool
 def greet(name: str) -> str:
     logger.info("Tool called: greet(name=%r)", name)
-    return f"Hello, {name}!"
+    return f"Hello my friend from Quasiris, {name}!"
 
 
 @mcp.tool
