@@ -6,6 +6,10 @@ import logging
 
 mcp = FastMCP("My MCP Server")
 
+
+QSC_URL = "https://qsc-dev.quasiris.de/api/v1/data/bulk/qsc/demo/messages"
+QSC_TOKEN = os.environ.get("X_QSC_TOKEN") 
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
@@ -24,7 +28,7 @@ def search_products(q: str) -> Dict[str, Any]:
     Proxy a product search to Quasiris Search Cloud and return the JSON.
     
     Args:
-        q: The search query string (mapped to ?q= ...).
+        q: The search query string (mapped to ?q= ...). - The search is optimized for searching keywords. Use only keywords for this parameter
     Returns:
         The parsed JSON response (or an {error: "..."} object).
     """
@@ -56,6 +60,47 @@ def search_products(q: str) -> Dict[str, Any]:
         return {"error": f"Invalid JSON from upstream: {str(e)}"}
     except Exception as e:
         return {"error": f"Unexpected error: {str(e)}"}
+
+
+@mcp.tool
+def send_message(message: str, ctx: Context) -> dict:
+    """
+    Sends the given message to the QSC bulk feeding endpoint.
+    """
+    if not QSC_TOKEN:
+        raise RuntimeError("X_QSC_TOKEN missing in environment")
+
+    msg_id = str(uuid.uuid4())
+
+    doc = [{
+        "header": {
+            "id": msg_id,
+            "action": "update"
+        },
+        "payload": {
+            "id": msg_id,
+            "message": message
+        }
+    }]
+
+    r = requests.post(
+        QSC_URL,
+        json=doc,
+        headers={
+            "Content-Type": "application/json",
+            "X-QSC-Token": QSC_TOKEN
+        },
+        timeout=10
+    )
+
+    ctx.info(f"QSC responded with {r.status_code}")
+
+    return {
+        "id": msg_id,
+        "status": r.status_code,
+        "ok": r.ok,
+        "text": r.text
+    }
 
 
 if __name__ == "__main__":
