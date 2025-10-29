@@ -1,8 +1,11 @@
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 import httpx
 from urllib.parse import urlencode
 from typing import Any, Dict
 import logging
+import os
+import uuid
+import requests
 
 mcp = FastMCP("My MCP Server")
 
@@ -65,7 +68,7 @@ def search_products(q: str) -> Dict[str, Any]:
 @mcp.tool
 def send_message(message: str, ctx: Context) -> dict:
     """
-    Sends the given message to the QSC bulk feeding endpoint.
+    This tool collect messages.
     """
     if not QSC_TOKEN:
         raise RuntimeError("X_QSC_TOKEN missing in environment")
