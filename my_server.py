@@ -6,6 +6,8 @@ import logging
 import os
 import uuid
 import requests
+from datetime import datetime
+import zoneinfo
 
 mcp = FastMCP("My MCP Server")
 
@@ -68,42 +70,111 @@ def search_products(q: str) -> Dict[str, Any]:
 @mcp.tool
 def send_message(message: str, ctx: Context) -> dict:
     """
-    This tool collect messages.
+    send a message to the qsc
     """
-    if not QSC_TOKEN:
-        raise RuntimeError("X_QSC_TOKEN missing in environment")
 
     msg_id = str(uuid.uuid4())
 
-    doc = [{
-        "header": {
+    doc = {
             "id": msg_id,
+            "type" : "message",
+            "message": message
+    }
+
+    r = send_to_qsc_with_doc_id(msg_id, doc);
+
+    #ctx.info(f"QSC responded with {r.status}")
+
+    return r
+
+
+@mcp.tool
+def add_to_cart(cartId: str, customerId: str, sku: str, ctx: Context) -> dict:
+    """
+    add the product with the sku to the cart
+
+    cartId: a unique id to identify the cart
+    customerId: a unique id to identify the customer
+    sku: the sku of the product
+    """
+
+    msg_id = str(uuid.uuid4())
+
+    doc = {
+            "id": msg_id,
+            "type": "addToCart",
+            "cartId" : cartId,
+            "sku" : sku,
+            "customerId" : customerId
+    }
+
+    r = send_to_qsc_with_doc_id(msg_id, doc);
+
+    #ctx.info(f"QSC responded with {r.status}")
+
+    return r
+
+def send_to_qsc(data: dict) -> dict:
+    """
+    Send a dict to QSC with an automatically generated UUID as id.
+    """
+    doc_id = str(uuid.uuid4())
+    return _send_to_qsc_internal(doc_id, data)
+
+
+def send_to_qsc_with_doc_id(doc_id: str, data: dict) -> dict:
+    """
+    Send a dict to QSC with a given id.
+    If doc_id is empty or None, a UUID will be generated.
+    """
+    if not doc_id:
+        doc_id = str(uuid.uuid4())
+    return _send_to_qsc_internal(doc_id, data)
+
+
+def _send_to_qsc_internal(doc_id: str, data: dict) -> dict:
+    """
+    Internal helper for sending data to QSC.
+    """
+    if not QSC_TOKEN:
+        raise RuntimeError("Missing X_QSC_TOKEN environment variable")
+
+    documents = [{
+        "header": {
+            "id": doc_id,
             "action": "update"
         },
         "payload": {
-            "id": msg_id,
-            "message": message
+            "id": doc_id,
+            "timestamp": datetime.now(zoneinfo.ZoneInfo("Europe/Berlin")).isoformat(),
+            **data
         }
     }]
 
-    r = requests.post(
-        QSC_URL,
-        json=doc,
-        headers={
-            "Content-Type": "application/json",
-            "X-QSC-Token": QSC_TOKEN
-        },
-        timeout=10
-    )
-
-    ctx.info(f"QSC responded with {r.status_code}")
-
-    return {
-        "id": msg_id,
-        "status": r.status_code,
-        "ok": r.ok,
-        "text": r.text
-    }
+    try:
+        with httpx.Client(timeout=10, follow_redirects=True) as client:
+            resp = client.post(
+                QSC_URL,
+                json=documents,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-QSC-Token": QSC_TOKEN
+                },
+            )
+            return {
+                "id": doc_id,
+                "status": resp.status_code,
+                "ok": resp.is_success,
+                "text": resp.text
+            }
+    except Exception as e:
+        logger.error("Failed to send to QSC: %s", e)
+        return {
+                "id": doc_id,
+                "status": 500,
+                "ok": resp.is_success,
+                "text": resp.text
+            }
 
 
 if __name__ == "__main__":
